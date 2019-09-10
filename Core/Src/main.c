@@ -10,6 +10,7 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "heartbeat-led.h"
+#include "thermometer.h"
 
 void SystemClock_Config();
 
@@ -28,11 +29,11 @@ int main()
   /* Initialize all configured peripherals */
   gpio_init();
   MX_USART1_UART_Init();
-  MX_ADC1_Init();
+  adc_init();
 
   // Define all of the tasks
   volatile BaseType_t retVal = xTaskCreate(heartbeat_led_task, "Heartbeat", 128, NULL, 1, NULL);
-
+  retVal = xTaskCreate(thermometer_task, "Thermometer", 128, NULL, 2, NULL);
   vTaskStartScheduler();
 
   while (1){};

@@ -42,6 +42,7 @@ Core/Src/adc.c \
 Core/Src/freertos.c \
 Core/Src/usart.c \
 Core/Src/heartbeat-led.c \
+Core/Src/thermometer.c \
 Core/Src/stm32l4xx_it.c \
 Core/Src/stm32l4xx_hal_msp.c \
 Core/Src/stm32l4xx_hal_timebase_TIM.c \
