@@ -1,0 +1,4 @@
+[submodule "sp-protocol"]
+	path = sp-protocol
+	url = git@github.com:ssnover95/sp-protocol.git
+	branch = master
