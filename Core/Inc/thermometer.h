@@ -5,6 +5,7 @@
 #pragma once
 
 #include <stdbool.h>
+#include <queue.h>
 
 typedef enum 
 {
@@ -18,6 +19,11 @@ typedef struct
   DegreeScale scale;
   uint16_t sample_period_milliseconds;
 } ThermometerSettings;
+
+typedef struct
+{
+  QueueHandle_t sensorDataQueue;
+} ThermometerTaskParams;
 
 void thermometer_task(void * parameters);
 

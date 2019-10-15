@@ -14,14 +14,17 @@ static ThermometerSettings task_settings;
 void thermometer_task(void * parameters)
 {
     // Lock this with a mutex
-    task_settings.scale = DEGREES_FAHRENHEIT;
+    task_settings.scale = DEGREES_KELVIN;
     task_settings.sample_period_milliseconds = 1000;
+
+    ThermometerTaskParams * params = (ThermometerTaskParams *) parameters;
 
     TickType_t start_time = xTaskGetTickCount();
     while (1)
     {
         // Lock mutex
         volatile int16_t reading = getTemperatureFromRawADCValue(adc_read(), task_settings.scale);
+	volatile BaseType_t res = xQueueSend(params->sensorDataQueue, (void *) &reading, pdMS_TO_TICKS(500));
         TickType_t delayTime = pdMS_TO_TICKS(task_settings.sample_period_milliseconds);
         // Unlock mutex
         vTaskDelayUntil(&start_time, delayTime);
@@ -30,27 +33,32 @@ void thermometer_task(void * parameters)
 
 void thermometer_getSettings(ThermometerSettings const * settings)
 {
-    // Should probably lock and copy data, not just pass pointer
-    settings = &task_settings;
 }
 
 void thermometer_updateSettings(ThermometerSettings const * const settings)
 {
-    // Lock mutex
-    task_settings = *settings;
-    // Unlock mutex
 }
 
 int16_t getTemperatureFromRawADCValue(uint32_t adcValue, DegreeScale scale)
 {
     int16_t retVal = 0;
+    float const VREF_MILLIVOLTS = 3300.f;
+    float const MEASURED_MILLIVOLTS = VREF_MILLIVOLTS * ((float) adcValue) / ((float) (1 << 12u));
+    float const MEASURED_DEGREES_CELSIUS = (MEASURED_MILLIVOLTS * (0.1)) - 50.;
     switch (scale)
     {
-        case DEGREES_FAHRENHEIT:
-            retVal = 98;
-            break;
+	case DEGREES_CELSIUS:
+	    retVal = (int16_t) MEASURED_DEGREES_CELSIUS;
+	    break;
+        case DEGREES_KELVIN:
+	    retVal = ((int16_t) MEASURED_DEGREES_CELSIUS) + 273;
+	    break;
+	case DEGREES_FAHRENHEIT:
+	    retVal = (int16_t) ((MEASURED_DEGREES_CELSIUS * 1.8) + 32);
+	    break;
         default:
             retVal = 0;
             break;
     }
+    return retVal;
 }

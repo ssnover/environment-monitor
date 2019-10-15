@@ -1,83 +1,122 @@
-/**
-  ******************************************************************************
-  * File Name          : USART.c
-  * Description        : This file provides code for the configuration
-  *                      of the USART instances.
-  ******************************************************************************
-  * This notice applies to any and all portions of this file
-  * that are not between comment pairs USER CODE BEGIN and
-  * USER CODE END. Other portions of this file, whether 
-  * inserted by the user or by software development tools
-  * are owned by their respective copyright owners.
-  *
-  * Copyright (c) 2019 STMicroelectronics International N.V. 
-  * All rights reserved.
-  *
-  * Redistribution and use in source and binary forms, with or without 
-  * modification, are permitted, provided that the following conditions are met:
-  *
-  * 1. Redistribution of source code must retain the above copyright notice, 
-  *    this list of conditions and the following disclaimer.
-  * 2. Redistributions in binary form must reproduce the above copyright notice,
-  *    this list of conditions and the following disclaimer in the documentation
-  *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
-  *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
-  *    software, must execute solely and exclusively on microcontroller or
-  *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
-  *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
-  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
+/*
+ * Purpose: Implementation of USART driver.
+ */
 
-/* Includes ------------------------------------------------------------------*/
 #include "usart.h"
-
 #include "gpio.h"
 
-/* USER CODE BEGIN 0 */
+#define BUFFER_SIZE (100)
 
-/* USER CODE END 0 */
+static UART_HandleTypeDef PERIPHERAL_UART4;
+static uint8_t UART_WRITE_BUFFER[BUFFER_SIZE];
+static uint8_t write_buffer_head;
+static uint8_t write_buffer_tail;
+static uint8_t UART_READ_BUFFER[BUFFER_SIZE];
+static uint8_t read_buffer_head;
+static uint8_t read_buffer_tail;
 
-UART_HandleTypeDef huart1;
+/*
+ * Writes the next byte in the ring buffer into the hardware buffer.
+ */
+void uart_sendNextByte();
 
-/* USART1 init function */
-
-void MX_USART1_UART_Init(void)
+extern void UART4_IRQHandler()
 {
+  HAL_UART_IRQHandler(&PERIPHERAL_UART4);
+}
 
-  huart1.Instance = USART1;
-  huart1.Init.BaudRate = 115200;
-  huart1.Init.WordLength = UART_WORDLENGTH_8B;
-  huart1.Init.StopBits = UART_STOPBITS_1;
-  huart1.Init.Parity = UART_PARITY_NONE;
-  huart1.Init.Mode = UART_MODE_TX_RX;
-  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
-  huart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
-  if (HAL_UART_Init(&huart1) != HAL_OK)
+void uart_init()
+{
+  __HAL_RCC_UART4_CLK_ENABLE();
+  __GPIOA_CLK_ENABLE();
+
+  GPIO_InitTypeDef gpioA;
+  gpioA.Pin = GPIO_PIN_0;
+  gpioA.Mode = GPIO_MODE_AF_PP;
+  gpioA.Alternate = GPIO_AF8_UART4;
+  gpioA.Speed = GPIO_SPEED_HIGH;
+  gpioA.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &gpioA);
+  gpioA.Pin = GPIO_PIN_1;
+  gpioA.Mode = GPIO_MODE_AF_OD;
+  HAL_GPIO_Init(GPIOA, &gpioA);
+
+  PERIPHERAL_UART4.Instance = UART4;
+  PERIPHERAL_UART4.Init.BaudRate = 19200;
+  PERIPHERAL_UART4.Init.WordLength = UART_WORDLENGTH_8B;
+  PERIPHERAL_UART4.Init.StopBits = UART_STOPBITS_1;
+  PERIPHERAL_UART4.Init.Parity = UART_PARITY_NONE;
+  PERIPHERAL_UART4.Init.Mode = UART_MODE_TX_RX;
+  PERIPHERAL_UART4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  PERIPHERAL_UART4.Init.OverSampling = UART_OVERSAMPLING_16;
+  PERIPHERAL_UART4.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  PERIPHERAL_UART4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&PERIPHERAL_UART4) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
   }
+  write_buffer_head = 0;
+  write_buffer_tail = 0;
 
+  NVIC_EnableIRQ(UART4_IRQn);
+}
+
+uint8_t uart_write(uint8_t const * bytesToWrite, uint8_t numberOfBytes)
+{
+  for (uint8_t byteIndex = 0u; byteIndex < numberOfBytes; ++byteIndex)
+  {
+    UART_WRITE_BUFFER[write_buffer_head++] = bytesToWrite[byteIndex];
+    if (write_buffer_head >= BUFFER_SIZE)
+    {
+      write_buffer_head = 0;
+    }
+  }
+  uart_sendNextByte();
+  return 0;
+}
+
+uint8_t uart_read(uint8_t * readBuffer, uint8_t numberOfBytes)
+{
+  uint8_t byteIndex = 0u;
+  for (byteIndex; 
+       (byteIndex < numberOfBytes) && (read_buffer_head != read_buffer_tail); 
+       ++byteIndex)
+  {
+    readBuffer[byteIndex] = UART_READ_BUFFER[read_buffer_tail++];
+    if (read_buffer_tail >= BUFFER_SIZE)
+    {
+      read_buffer_tail = 0;
+    }
+  }
+  return byteIndex;
+}
+
+void uart_sendNextByte()
+{
+  HAL_UART_Transmit_IT(&PERIPHERAL_UART4, UART_WRITE_BUFFER + write_buffer_tail, 1);
+  write_buffer_tail++;
+  if (write_buffer_tail >= BUFFER_SIZE)
+  {
+    write_buffer_tail = 0;
+  }
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef * handle)
+{
+  if (write_buffer_tail != write_buffer_head)
+  {
+    uart_sendNextByte();
+  }
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef * handle)
+{
+  HAL_UART_Receive_IT(&PERIPHERAL_UART4, UART_READ_BUFFER + read_buffer_head, 1);
+  read_buffer_head++;
+  if (read_buffer_head >= BUFFER_SIZE)
+  {
+    read_buffer_head = 0;
+  }
 }
 
 void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)

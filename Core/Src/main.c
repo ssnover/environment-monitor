@@ -11,8 +11,12 @@
 #include "task.h"
 #include "heartbeat-led.h"
 #include "thermometer.h"
+#include "data-output.h"
 
 void SystemClock_Config();
+
+static ThermometerTaskParams thermometer_params;
+static OutputTaskParams output_params;
 
 /**
   * @brief  The application entry point.
@@ -28,12 +32,17 @@ int main()
 
   /* Initialize all configured peripherals */
   gpio_init();
-  MX_USART1_UART_Init();
   adc_init();
+  uart_init();
 
+  // Queue for temperature sensor data
+  QueueHandle_t temperature_queue = xQueueCreate(2, sizeof(uint16_t));
+  thermometer_params.sensorDataQueue = temperature_queue;
+  output_params.sensorDataQueue = temperature_queue;
   // Define all of the tasks
   volatile BaseType_t retVal = xTaskCreate(heartbeat_led_task, "Heartbeat", 128, NULL, 1, NULL);
-  retVal = xTaskCreate(thermometer_task, "Thermometer", 128, NULL, 2, NULL);
+  retVal = xTaskCreate(thermometer_task, "Thermometer", 128, &thermometer_params, 2, NULL);
+  retVal = xTaskCreate(output_task, "Output", 128, &output_params, 1, NULL);
   vTaskStartScheduler();
 
   while (1){};

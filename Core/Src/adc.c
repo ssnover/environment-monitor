@@ -29,7 +29,8 @@ void adc_init(void)
   PERIPHERAL_ADC1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   PERIPHERAL_ADC1.Init.NbrOfConversion = 1;
   PERIPHERAL_ADC1.Init.DMAContinuousRequests = ENABLE;
-  PERIPHERAL_ADC1.Init.EOCSelection = DISABLE;
+  PERIPHERAL_ADC1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  PERIPHERAL_ADC1.Init.Overrun = ADC_OVR_DATA_OVERWRITTEN;
   HAL_ADC_Init(&PERIPHERAL_ADC1);
 
   ADC_ChannelConfTypeDef adc_channel_config;
@@ -43,16 +44,18 @@ void adc_init(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  HAL_ADC_Start(&PERIPHERAL_ADC1);
 }
 
 uint32_t adc_read()
 {
+    
+    HAL_ADC_Start(&PERIPHERAL_ADC1);
     uint32_t retVal = 0u;
     if (HAL_OK == HAL_ADC_PollForConversion(&PERIPHERAL_ADC1, 1000000))
     {
         retVal = HAL_ADC_GetValue(&PERIPHERAL_ADC1);
     }
+    HAL_ADC_Stop(&PERIPHERAL_ADC1);
     return retVal;
 }
 
