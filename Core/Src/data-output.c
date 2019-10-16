@@ -7,6 +7,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include "data-output.h"
+#include "sp-protocol/serialize.h"
 #include "usart.h"
 
 static void printHelloWorld();
@@ -25,9 +26,12 @@ void output_task(void * parameters)
     if (pdPASS == xQueueReceive(params->sensorDataQueue, (void *) &sensor_reading, pdMS_TO_TICKS(500)))
     {
       // Got some data now let's send it!
-      itoa(sensor_reading, itoaBuffer, 10);
-      uart_write(itoaBuffer, strlen(itoaBuffer));
-      uart_write("\r\n", 2);
+      sp_TemperatureKelvin msg;
+      msg.temperature = sensor_reading;
+      SerializationBuffer buffer;
+      buffer.data = itoaBuffer;
+      serializeTemperatureKelvin(&msg, &buffer);
+      uart_write(buffer.data, buffer.size);
     }
   }
 }
